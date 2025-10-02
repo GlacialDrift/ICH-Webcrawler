@@ -1,3 +1,8 @@
+---
+Author: Mike Harris
+Version: 0.1.1
+Github: https://github.com/GlacialDrift/ICH-Webcrawler/
+---
 # ICH Webcrawler
 
 A lightweight crawler for the [ICH website](https://www.ich.org/), built in Java.  
@@ -5,8 +10,10 @@ It checks guideline pages for changes, saves daily snapshots, and generates diff
 
 ## Installation (for users)
 
-1. Download the portable app folder (`ICH-Webcrawler/ICH-Webcrawler.exe`) from releases.
-2. Unzip it and double-click `ICH-Webcrawler.exe`.
+1. Download the portable app folder (`ICH-Webcrawler-App.zip`) from releases.
+2. Unzip it and save to a known location (Documents, C:\, wherever)
+3. Open the folder and double-click `ICH-Webcrawler.exe`.
+4. The .exe file must remain adjacent to the /app/ and /runtime/ subfolders
 
 ## Usage
 
@@ -52,7 +59,7 @@ TITLE_CHANGED: [Q1 EWG]
 - No separate Java install needed — the EXE bundles its own runtime.
 
 
-# Build From Source to EXE (Developers)
+# Build From Source to .exe (Dev)
 
 This section explains how to build the shaded jar and bundle it as a Windows EXE.
 ### 0) Prerequisites
@@ -194,3 +201,4 @@ if (Get-Command candle -ErrorAction SilentlyContinue) {
 }
 
 ```
+
