@@ -9,7 +9,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -17,11 +16,18 @@ import java.util.*;
 
 import java.text.Normalizer;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.nio.charset.StandardCharsets;
+
 
 public class Main {
 
     private static final Path PAGES_JSON = Paths.get("src", "main", "resources", "pages.json");
     private static final ObjectMapper MAPPER = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final Path SNAPSHOTS_DIR = Paths.get("snapshots");
 
     public static void main(String[] args) throws Exception {
         System.out.println("ICH Crawler v0 - booting");
@@ -35,30 +41,36 @@ public class Main {
                 MAPPER.getTypeFactory().constructCollectionType(List.class, PageConfig.class));
 
         List<Pair> pairs = new ArrayList<>();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request;
+        HttpResponse<String> response;
 
         for(PageConfig page : pages) {
             if (page.apiUrl == null || page.apiUrl.isBlank()) {
                 System.err.println("Add an apiUrl to pages.json for " + page.pageID);
+                continue;
             }
             System.out.println("Fetching: " + page.url);
-
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder(URI.create(page.apiUrl))
+            request = HttpRequest.newBuilder(URI.create(page.apiUrl))
                     .header("User-Agent", "ICH-Webcrawler/0.1")
                     .GET()
                     .build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            response = client.send(request, HttpResponse.BodyHandlers.ofString());
             System.out.println("API status = " + response.statusCode());
-            if (response.statusCode() != 200) return;
+            if (response.statusCode() != 200){
+                System.err.println("Non-200 (" + response.statusCode() +") on " + page.pageID);
+                continue;
+            }
 
             JsonNode root = MAPPER.readTree(response.body());
             boolean found = collectFromGuidelineBlock(root, pairs, false);
         }
 
-        System.out.println("Found " + pairs.size() + " guideline items:");
-        for (Pair p : pairs) {
-            System.out.println("  [" + p.code + "] " + p.title);
-        }
+        pairs.sort(Comparator
+                .comparing((Pair p) -> normalizeCodeKey(p.code))
+        );
+
+        writeSnapshot(pairs);
     }
 
 
@@ -70,7 +82,7 @@ public class Main {
             JsonNode bundle = entityInfo.get("bundle");
             if(bundle !=null && "guideline".equalsIgnoreCase(bundle.asText())){
                 JsonNode items = node.get("items");
-                if(items !=null & items.isArray()){
+                if(items !=null && items.isArray()){
                     for(JsonNode it: items){
                         JsonNode code = it.get("code");
                         JsonNode title = it.get("title");
@@ -100,7 +112,7 @@ public class Main {
 
     private static String normalize(String s){
         if (s==null) return "";
-        return s.trim().replaceAll("\\s+", " ").replace('\u2013', '-').replace('\u2014','-');
+        return s.trim().replaceAll("\\s+", " ").replace('–', '-').replace('—','-');
     }
 
     private static String normalizeCodeKey(String s) {
@@ -110,8 +122,8 @@ public class Main {
                 .replace('\u00A0', ' ')   // NBSP → space
                 .replace('\u2007', ' ')   // figure space
                 .replace('\u202F', ' ')   // narrow NBSP
-                .replace('\u2013','-')    // en dash → hyphen
-                .replace('\u2014','-')    // em dash → hyphen
+                .replace('–','-')    // en dash → hyphen
+                .replace('—','-')    // em dash → hyphen
                 .trim()
                 .replaceAll("\\s+", " "); // collapse runs of whitespace
 
@@ -125,6 +137,30 @@ public class Main {
         // except letters/numbers/() to be extra strict (optional):
         // t = t.replaceAll("[^A-Z0-9()]", "");
 
+        t = normalize(t);
+
         return t;
+    }
+
+    public static String todayString(){
+        return LocalDate.now().format(DateTimeFormatter.ISO_DATE);
+    }
+
+    public static void writeSnapshot(List<Pair> pairs) throws Exception {
+        List<Snapshot.SnapshotItem> items = new ArrayList<>();
+        for (Pair p : pairs){
+            items.add(new Snapshot.SnapshotItem(p.code, p.title));
+        }
+
+        Snapshot ss = new Snapshot(OffsetDateTime.now(ZoneOffset.UTC).toString(), items);
+
+        if(!Files.exists(SNAPSHOTS_DIR)){
+            Files.createDirectories(SNAPSHOTS_DIR);
+        }
+        Path outFile = SNAPSHOTS_DIR.resolve(todayString() + ".json");
+
+        byte[] bytes = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsBytes(ss);
+        Files.write(outFile,bytes);
+        System.out.println("  Wrote snapshot -> " + outFile.toString());
     }
 }
