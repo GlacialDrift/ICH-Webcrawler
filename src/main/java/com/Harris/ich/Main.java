@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -28,6 +29,7 @@ public class Main {
     private static final Path PAGES_JSON = Paths.get("src", "main", "resources", "pages.json");
     private static final ObjectMapper MAPPER = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     private static final Path SNAPSHOTS_DIR = Paths.get("snapshots");
+    private static final Path DIFFS_DIR = Paths.get("diffs");
 
     public static void main(String[] args) throws Exception {
         System.out.println("ICH Crawler v0 - booting");
@@ -70,11 +72,83 @@ public class Main {
                 .comparing((Pair p) -> normalizeCodeKey(p.code))
         );
 
-        writeSnapshot(pairs);
+
+
+        List<Snapshot.SnapshotItem> items = new ArrayList<>();
+        for(Pair p:pairs){
+            items.add(new Snapshot.SnapshotItem(p.code, p.title));
+        }
+        Snapshot current = new Snapshot(OffsetDateTime.now(ZoneOffset.UTC).toString(),items);
+        writeSnapshot(current);
+
+
+        Optional<Path> priorPath = findMostRecentSnapshotBeforeToday();
+        if(priorPath.isPresent()){
+            Snapshot prior = readSnapshot(priorPath.get());
+            Diff diff = DiffSnapshots.performDiff(prior, current);
+            writeDiffMarkdwon(todayString(), diff);
+        }else{
+            System.out.println("No prior Snapshot found. Skipping diff.");
+        }
     }
 
+    private static void writeDiffMarkdwon(String date, Diff diff) throws Exception{
+        Files.createDirectories(DIFFS_DIR);
+        Path out = DIFFS_DIR.resolve(date+".md");
 
-    public static boolean collectFromGuidelineBlock(JsonNode node, List<Pair> out, boolean stopAfterFirst){
+        StringBuilder sb = new StringBuilder();
+        sb.append("ICH Weekly Diff - ").append(date).append("\n\n");
+        if(diff.added.isEmpty() && diff.removed.isEmpty() && diff.titleChanged.isEmpty()){
+            sb.append("No Changes. \n");
+        }else{
+            for(Snapshot.SnapshotItem it: diff.added){
+                sb.append("ADDED:   [").append(it.code).append("] ").append(it.title).append("\n");
+            }
+            sb.append("\n\n");
+            for(Snapshot.SnapshotItem it: diff.removed){
+                sb.append("REMOVED: [").append(it.code).append("] ").append(it.title).append("\n");
+            }
+            sb.append("\n\n");
+            for(TitleChange tc : diff.titleChanged){
+                sb.append("TITLE CHANGED: {").append(tc.code).append("\n")
+                        .append("    \"").append(tc.oldTitle).append("\"\n")
+                        .append(" -> \"").append(tc.newTitle).append("\"\n");
+            }
+        }
+
+        Files.writeString(out, sb.toString(), StandardCharsets.UTF_8);
+        System.out.println("Wrote diff -> "+ out.toString());
+    }
+
+    private static Optional<Path> findMostRecentSnapshotBeforeToday() throws Exception {
+        if (!Files.exists(SNAPSHOTS_DIR)) return Optional.empty();
+        LocalDate today = LocalDate.now();
+        LocalDate best = null;
+        Path bestPath = null;
+
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(SNAPSHOTS_DIR)){
+            for(Path f : ds){
+                if(!Files.isRegularFile(f)) continue;
+                String name = f.getFileName().toString();
+                if(!name.endsWith(".json")) continue;
+                try {
+                    LocalDate d = LocalDate.parse(name.substring(0, name.length()-5));
+                    if(!d.isBefore(today)) continue;
+                    if(best == null || d.isAfter(best)){
+                        best = d;
+                        bestPath = f;
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        return Optional.ofNullable(bestPath);
+    }
+
+    private static Snapshot readSnapshot(Path file) throws Exception {
+        return MAPPER.readValue(Files.newInputStream(file), Snapshot.class);
+    }
+
+    private static boolean collectFromGuidelineBlock(JsonNode node, List<Pair> out, boolean stopAfterFirst){
         if (node == null) return false;
 
         JsonNode entityInfo = node.get("entityInfo");
@@ -115,7 +189,7 @@ public class Main {
         return s.trim().replaceAll("\\s+", " ").replace('–', '-').replace('—','-');
     }
 
-    private static String normalizeCodeKey(String s) {
+    public static String normalizeCodeKey(String s) {
         if (s == null) return "";
         // Unicode normalize (NFKC), trim, collapse whitespace (including NBSP), unify dashes
         String t = Normalizer.normalize(s, Normalizer.Form.NFKC)
@@ -142,18 +216,11 @@ public class Main {
         return t;
     }
 
-    public static String todayString(){
+    private static String todayString(){
         return LocalDate.now().format(DateTimeFormatter.ISO_DATE);
     }
 
-    public static void writeSnapshot(List<Pair> pairs) throws Exception {
-        List<Snapshot.SnapshotItem> items = new ArrayList<>();
-        for (Pair p : pairs){
-            items.add(new Snapshot.SnapshotItem(p.code, p.title));
-        }
-
-        Snapshot ss = new Snapshot(OffsetDateTime.now(ZoneOffset.UTC).toString(), items);
-
+    private static void writeSnapshot(Snapshot ss) throws Exception {
         if(!Files.exists(SNAPSHOTS_DIR)){
             Files.createDirectories(SNAPSHOTS_DIR);
         }
