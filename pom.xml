@@ -2,9 +2,9 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.mike.ich</groupId>
+    <groupId>com.Harris.ich</groupId>
     <artifactId>ICH-Webcrawler</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
@@ -28,7 +28,51 @@
     </dependencies>
 
     <build>
+        <!-- (1) Include resources in the JAR -->
+        <resources>
+            <!-- normal resources -->
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+            </resource>
+
+            <!-- also package README and LICENSE at the root of the JAR -->
+            <resource>
+                <directory>${project.basedir}</directory>
+                <includes>
+                    <include>README.md</include>
+                    <include>LICENSE</include>
+                </includes>
+                <filtering>false</filtering>
+            </resource>
+        </resources>
+
         <plugins>
+            <!-- (2) OPTIONAL: prepare dist-resources/ for jpackage -resource-dir -->
+            <plugin>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                     <execution>
+                        <id>prep-dist-resources</id>
+                        <phase>package</phase>
+                        <goals><goal>copy-resources</goal></goals>
+                        <configuration>
+                            <outputDirectory>${project.basedir}/dist-resources</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}</directory>
+                                    <includes>
+                                        <include>README.md</include>
+                                        <include>LICENSE</include>
+                                    </includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- Shade plugin to build a fat jar with dependencies -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -53,4 +97,5 @@
             </plugin>
         </plugins>
     </build>
+
 </project>
