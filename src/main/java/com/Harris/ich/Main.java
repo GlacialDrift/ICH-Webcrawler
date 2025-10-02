@@ -388,6 +388,6 @@ public class Main {
 
         byte[] bytes = MAPPER.writerWithDefaultPrettyPrinter().writeValueAsBytes(ss);
         Files.write(outFile,bytes);
-        System.out.println("  Wrote snapshot -> " + outFile.toString());
+        System.out.println("  Wrote snapshot -> " + outFile.toString()+"\n");
     }
 }
