@@ -2,12 +2,33 @@ package com.Harris.ich;
 
 import java.util.*;
 
+
+/**
+ * Utility class for computing differences between two guideline snapshots.
+ * <p>
+ * Identifies added, removed, and title-changed items between a previous and current snapshot.
+ */
 public class DiffSnapshots {
 
-    public DiffSnapshots(){
 
-    }
+    /**
+     * Default constructor.
+     * <p>
+     * This class is stateless and primarily used via its static methods.
+     */
+    public DiffSnapshots(){}
 
+
+    /**
+     * Computes the differences between two snapshots.
+     * <p>
+     * Determines which items were added, removed, or had title changes
+     * based on normalized code keys and titles.
+     *
+     * @param prev the previous snapshot
+     * @param curr the current snapshot
+     * @return a {@link Diff} object containing the differences
+     */
     public static Diff performDiff(Snapshot prev, Snapshot curr){
         Diff diff = new Diff();
 
@@ -50,6 +71,13 @@ public class DiffSnapshots {
         return diff;
     }
 
+
+    /**
+     * Builds a mapping from normalized guideline codes to a set of normalized titles.
+     *
+     * @param items list of snapshot items
+     * @return map of code keys to sets of title keys
+     */
     private static Map<String, Set<String>> titlesByCode(List<Snapshot.SnapshotItem> items){
         Map<String, Set<String>> map = new LinkedHashMap<>();
         for(Snapshot.SnapshotItem it: items){
@@ -60,6 +88,13 @@ public class DiffSnapshots {
         return map;
     }
 
+
+    /**
+     * Generates a normalized key for a snapshot item based on its code.
+     *
+     * @param it the snapshot item
+     * @return normalized code key
+     */
     private static String key(Snapshot.SnapshotItem it){
         return Main.normalizeCodeKey(it.code);
     }

@@ -25,21 +25,53 @@ import java.time.format.DateTimeFormatter;
 import java.nio.charset.StandardCharsets;
 
 
+/**
+ * Entry point for the ICH Webcrawler application.
+ * <p>
+ * This class handles loading page configurations, fetching data from APIs,
+ * parsing guideline information, generating snapshots, and computing diffs
+ * between current and previous snapshots.
+ */
 public class Main {
 
+
+    /**
+     * Returns the base directory for storing crawler data.
+     *
+     * @return path to the base data directory
+     */
     private static java.nio.file.Path baseDataDir(){
         String home = System.getProperty("user.home");
         return java.nio.file.Paths.get(home, "ICH-Webcrawler");
     }
 
+    /** Jackson ObjectMapper configured to ignore unknown properties during deserialization. */
     private static final ObjectMapper MAPPER = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+    /** Directory path where snapshot JSON files are stored. */
     private static final Path SNAPSHOTS_DIR = baseDataDir().resolve("snapshots");
+
+    /** Directory path where markdown diff files are stored. */
     private static final Path DIFFS_DIR = baseDataDir().resolve("diffs");
 
+
+    /**
+     * Resolves the path for today's diff markdown file.
+     *
+     * @return path to today's diff file
+     */
     private static java.nio.file.Path diffPathForToday(){
         return DIFFS_DIR.resolve(todayString()+".md");
     }
 
+
+    /**
+     * Loads page configurations from pages.json using multiple fallback strategies.
+     *
+     * @param mapper the ObjectMapper to use for deserialization
+     * @return list of PageConfig objects
+     * @throws Exception if the file cannot be found or parsed
+     */
     private static List<PageConfig> loadPages(ObjectMapper mapper) throws Exception {
         // Try absolute-from-root via the class (leading slash)
         try (InputStream is = Main.class.getResourceAsStream("/pages.json")) {
@@ -66,6 +98,14 @@ public class Main {
         throw new IllegalStateException("pages.json not found on classpath or working dir.");
     }
 
+
+    /**
+     * Main method that orchestrates the web crawling, snapshot generation,
+     * and diff computation.
+     *
+     * @param args command-line arguments (not used)
+     * @throws Exception if any IO or parsing error occurs
+     */
     public static void main(String[] args) throws Exception {
         System.out.println("ICH Crawler v0 - booting");
 
@@ -121,6 +161,14 @@ public class Main {
         }
     }
 
+
+    /**
+     * Writes a markdown file summarizing the differences between snapshots.
+     *
+     * @param date the date string for the diff
+     * @param diff the computed diff object
+     * @throws Exception if writing or opening the file fails
+     */
     private static void writeDiffMarkdwon(String date, Diff diff) throws Exception{
         Files.createDirectories(DIFFS_DIR);
         Path out = DIFFS_DIR.resolve(date+".md");
@@ -157,6 +205,13 @@ public class Main {
 
     }
 
+
+    /**
+     * Attempts to open a file using the system's default application.
+     *
+     * @param path the path to the file to open
+     * @throws Exception if the process fails
+     */
     private static void openFile(Path path) throws Exception{
         String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
         if (os.contains("win")) {
@@ -171,6 +226,13 @@ public class Main {
         }
     }
 
+
+    /**
+     * Finds the most recent snapshot file before today's date.
+     *
+     * @return optional path to the most recent snapshot
+     * @throws Exception if directory access fails
+     */
     private static Optional<Path> findMostRecentSnapshotBeforeToday() throws Exception {
         if (!Files.exists(SNAPSHOTS_DIR)) return Optional.empty();
         LocalDate today = LocalDate.now();
@@ -195,10 +257,27 @@ public class Main {
         return Optional.ofNullable(bestPath);
     }
 
+
+    /**
+     * Reads a snapshot from a JSON file.
+     *
+     * @param file the path to the snapshot file
+     * @return deserialized Snapshot object
+     * @throws Exception if reading or parsing fails
+     */
     private static Snapshot readSnapshot(Path file) throws Exception {
         return MAPPER.readValue(Files.newInputStream(file), Snapshot.class);
     }
 
+
+    /**
+     * Recursively collects guideline items from a JSON node.
+     *
+     * @param node the root JSON node
+     * @param out the list to populate with extracted pairs
+     * @param stopAfterFirst whether to stop after the first match
+     * @return true if a guideline block was found
+     */
     private static boolean collectFromGuidelineBlock(JsonNode node, List<Pair> out, boolean stopAfterFirst){
         if (node == null) return false;
 
@@ -235,11 +314,28 @@ public class Main {
         return foundHere;
     }
 
+
+    /**
+     * Normalizes a string by trimming, collapsing whitespace, and replacing special dashes.
+     *
+     * @param s the input string
+     * @return normalized string
+     */
     private static String normalize(String s){
         if (s==null) return "";
         return s.trim().replaceAll("\\s+", " ").replace('–', '-').replace('—','-');
     }
 
+
+    /**
+     * Normalizes a code string for comparison purposes.
+     * <p>
+     * Applies Unicode normalization, trims whitespace, replaces special characters,
+     * and standardizes formatting for consistent key comparison.
+     *
+     * @param s the input code string
+     * @return normalized code key
+     */
     public static String normalizeCodeKey(String s) {
         if (s == null) return "";
         // Unicode normalize (NFKC), trim, collapse whitespace (including NBSP), unify dashes
@@ -267,10 +363,23 @@ public class Main {
         return t;
     }
 
+
+    /**
+     * Returns today's date as an ISO-formatted string.
+     *
+     * @return today's date string
+     */
     private static String todayString(){
         return LocalDate.now().format(DateTimeFormatter.ISO_DATE);
     }
 
+
+    /**
+     * Writes the current snapshot to a JSON file in the snapshots directory.
+     *
+     * @param ss the snapshot to write
+     * @throws Exception if writing fails
+     */
     private static void writeSnapshot(Snapshot ss) throws Exception {
         if(!Files.exists(SNAPSHOTS_DIR)){
             Files.createDirectories(SNAPSHOTS_DIR);
