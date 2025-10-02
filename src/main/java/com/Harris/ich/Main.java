@@ -1,4 +1,4 @@
-package com.Harris;
+package com.Harris.ich;
 
 public class Main {
     public static void main(String[] args) {
