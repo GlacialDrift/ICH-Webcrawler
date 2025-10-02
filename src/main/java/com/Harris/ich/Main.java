@@ -118,6 +118,20 @@ public class Main {
 
         Files.writeString(out, sb.toString(), StandardCharsets.UTF_8);
         System.out.println("Wrote diff -> "+ out.toString());
+
+        boolean hasChanges = !(diff.added.isEmpty() && diff.removed.isEmpty() && diff.titleChanged.isEmpty());
+        if (hasChanges){
+            java.nio.file.Path md = java.nio.file.Paths.get("diffs", todayString()+".md");
+            try{
+                if(java.awt.Desktop.isDesktopSupported()){
+                    java.awt.Desktop.getDesktop().open(md.toFile());
+                }else{
+                    System.out.println("Diff at: " + md.toAbsolutePath());
+                }
+            } catch (Exception e){
+                System.out.println("Could not auto-open diff. File at: " + md.toAbsolutePath());
+            }
+        }
     }
 
     private static Optional<Path> findMostRecentSnapshotBeforeToday() throws Exception {
