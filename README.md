@@ -1,25 +1,71 @@
-Build: Source → EXE (Windows)
+# ICH Webcrawler
 
-This project ships as a single EXE using the JDK’s jpackage. Steps below assume Windows, JDK 17+ (works with JDK 25), and Maven.
+A lightweight crawler for the [ICH website](https://www.ich.org/), built in Java.  
+It checks guideline pages for changes, saves daily snapshots, and generates diffs to highlight new/removed/updated guidelines.
 
-0) Project prerequisites
+## Installation (for users)
 
-pages.json location: put it at src/main/resources/pages.json.
-The app loads it from the classpath; do not reference src/... in code.
+1. Download the portable app folder (`ICH-Webcrawler/ICH-Webcrawler.exe`) from releases.
+2. Unzip it and double-click `ICH-Webcrawler.exe`.
 
-Output directories: the app writes to a user folder (recommended):
+## Usage
 
-%USERPROFILE%\ICH-Webcrawler\
-    snapshots\YYYY-MM-DD.json
-    diffs\YYYY-MM-DD.md
+- **Run manually:** Double-click the EXE. A console window will show progress.
+- **What it does:**
+  - Fetches the latest JSON data from ICH guideline pages.
+  - Writes a snapshot of all guideline code/title pairs.
+  - Compares today’s snapshot with the most recent earlier snapshot.
+  - Automatically opens Today's DIFF file showing changes from the most recent earlier snapshot
+
+## Data storage
+
+Snapshots and diffs are stored under your user profile:
+
+```
+%USERPROFILE%\ICH-Webcrawler  
+snapshots\YYYY-MM-DD.json  
+diffs\YYYY-MM-DD.md
+```
+
+- **Snapshots**: full list of guidelines at a point in time.
+- **Diffs**: added, removed, or changed guidelines since last run.
+
+## Example diff
+
+```
+ICH Weekly Diff – 2025-10-02
+
+ADDED:   [Q1G] New Guideline Title
+REMOVED: [Q1C] Stability Testing for New Dosage Forms
+TITLE_CHANGED: [Q1 EWG]
+    "Old Title"
+ -> "New Revised Title"
+ ```
+
+## Scheduling (optional)
+
+- **Automated runs:** Use Windows Task Scheduler to run weekly
+- **Manual runs:** Just double-click the EXE whenever you want to check for updates.
+## Requirements
+
+- Windows 10/11
+- No separate Java install needed — the EXE bundles its own runtime.
 
 
-(If you use a custom data dir flag, adjust accordingly.)
+# Build From Source to EXE (Developers)
 
-1) Ensure the POM builds a shaded (fat) JAR
+This section explains how to build the shaded jar and bundle it as a Windows EXE.
+### 0) Prerequisites
 
-pom.xml must include the Shade plugin and your main class:
+- JDK 17+ (JDK 25 also works). Must include `jpackage`.
+- Maven installed, or use IDE’s Maven support.
+- WiX Toolset (only if you want to build an MSI installer).
 
+### 1) Build a shaded JAR
+
+Ensure `pom.xml` contains the **Maven Shade plugin**:
+
+```xml
 <build>
   <plugins>
     <plugin>
@@ -44,47 +90,26 @@ pom.xml must include the Shade plugin and your main class:
   </plugins>
 </build>
 
+```
 
-Tip: target/ICH-Webcrawler-0.1.0.jar is your shaded JAR (Maven keeps a backup as original-...jar).
+Build with Maven:
 
-2) Install JDK and set JAVA_HOME
-
-Install a JDK with jpackage (Temurin/Oracle JDK 17+ or 25).
-
-Set:
-
-JAVA_HOME → full JDK folder (e.g. C:\Program Files\Eclipse Adoptium\jdk-25.0.0.36-hotspot)
-
-add %JAVA_HOME%\bin to PATH
-
-New PowerShell:
-
-java -version
-jpackage --version
-
-3) Build the shaded JAR
-
-From project root:
-
+```powershell
 mvn clean package
+```
 
+Result:  
+`target/ICH-Webcrawler-0.1.0.jar` ← this is the fat (shaded) jar.
 
-You should see:
+Verify `pages.json` is inside:
 
-target\ICH-Webcrawler-0.1.0.jar
-
-
-Verify pages.json is inside the JAR:
-
+```powershell
 jar tf target\ICH-Webcrawler-0.1.0.jar | Select-String pages.json
+```
 
+### 2) Package as portable EXE (no installer)
 
-It should print pages.json.
-
-4) Create a portable EXE (app-image)
-
-This produces a folder with ICH-Webcrawler.exe that you can zip/share.
-
+```powershell
 & "$env:JAVA_HOME\bin\jpackage.exe" `
   --name "ICH-Webcrawler" `
   --input "target" `
@@ -93,28 +118,16 @@ This produces a folder with ICH-Webcrawler.exe that you can zip/share.
   --type app-image `
   --win-console
 
+```
 
-Output:
+Result:  
+`.\ICH-Webcrawler\ICH-Webcrawler.exe` (zip/share this folder).
 
-.\ICH-Webcrawler\ICH-Webcrawler.exe
+### 3) Package as MSI installer (optional)
 
+Requires [WiX Toolset](https://github.com/wixtoolset/wix/releases/). Add its `bin` folder to PATH.
 
---win-console keeps a console window (useful for logs). Remove it for a silent app.
-
-5) (Optional) Create an MSI installer
-
-jpackage needs WiX Toolset on PATH to build MSI.
-
-Install WiX v3.x: https://wixtoolset.org/releases/
-
-Add its bin folder to PATH (e.g. C:\Program Files (x86)\WiX Toolset v3.11\bin).
-
-where candle
-where light
-
-
-Build MSI:
-
+```powershell
 & "$env:JAVA_HOME\bin\jpackage.exe" `
   --name "ICH-Webcrawler" `
   --app-version "1.0.0" `
@@ -128,77 +141,25 @@ Build MSI:
   --win-dir-chooser `
   --win-console
 
+```
 
-Output:
-
-ICH-Webcrawler-1.0.0.msi
-
-6) Run & verify
-
-Portable app: double-click ICH-Webcrawler.exe
-
-Installer: run the .msi, then launch from Start Menu.
-
-On first run you should see:
-
-%USERPROFILE%\ICH-Webcrawler\snapshots\<YYYY-MM-DD>.json
-%USERPROFILE%\ICH-Webcrawler\diffs\<YYYY-MM-DD>.md
+Result:  
+`ICH-Webcrawler-1.0.0.msi` ← double-click to install.
 
 
-If changes were detected, the app opens the diff; otherwise it prints “No changes.”
+### Troubleshooting
 
-Troubleshooting
-
-App can’t find pages.json:
-
-Ensure it exists at src/main/resources/pages.json.
-
-Ensure your code loads via classpath:
-
-Main.class.getResourceAsStream("/pages.json");
+- **`pages.json` not found:** ensure it’s in `src/main/resources/` and loaded with `Main.class.getResourceAsStream("/pages.json")`.
+- **EXE closes too fast:** use `--pause` flag or build a `.bat` wrapper with `pause`.
+- **Diff doesn’t open:** no default app for `.md` installed. Open manually (e.g. in VS Code).
+- **WiX errors:** skip MSI, use `--type app-image`.
 
 
-Rebuild mvn clean package.
+## One-liner build script (optional)
 
-Confirm it’s inside the JAR with jar tf ... | Select-String pages.json.
+Create `build.ps1`:
 
-EXE closes too fast:
-
-Build with --win-console to see logs.
-
-Add a --pause flag in your app (readline at end) or create a .bat:
-
-@echo off
-"C:\Program Files\ICH-Webcrawler\ICH-Webcrawler.exe" %*
-echo.
-pause
-
-
-Diff doesn’t open:
-
-Use a shell-based opener on Windows:
-
-new ProcessBuilder("cmd", "/c", "start", "", "\"" + path + "\"").start();
-
-
-Log the full diff path; open it manually if there’s no .md association.
-
-Installer build fails with WiX errors:
-
-Use --type app-image (no WiX required), or
-
-Install WiX and ensure candle.exe and light.exe are on PATH, then use --type msi.
-
-Non-200 API responses:
-
-Continue to next page (don’t abort the run).
-
-Log API URL and status for the failing page.
-
-One-liner build script (optional)
-
-Create build.ps1:
-
+```powershell
 # Build shaded jar
 mvn clean package || exit $LASTEXITCODE
 
@@ -231,3 +192,5 @@ if (Get-Command candle -ErrorAction SilentlyContinue) {
 } else {
   Write-Host "WiX not found; skipped MSI."
 }
+
+```
