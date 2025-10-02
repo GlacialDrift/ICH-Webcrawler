@@ -1,0 +1,25 @@
+[
+  {
+    "pageID": "ich-quality",
+    "url": "https://www.ich.org/page/quality-guidelines",
+    "apiUrl": "https://admin.ich.org/api/v1/nodes?loadEntities%5B%5D=paragraph&alias=/page/quality-guidelines"
+  },
+
+  {
+    "pageID": "ich-safety",
+    "url": "https://www.ich.org/page/safety-guidelines",
+    "apiUrl": "https://admin.ich.org/api/v1/nodes?loadEntities%5B%5D=paragraph&alias=/page/safety-guidelines"
+  },
+
+  {
+    "pageID": "ich-efficacy",
+    "url": "https://www.ich.org/page/efficacy-guidelines",
+    "apiUrl": "https://admin.ich.org/api/v1/nodes?loadEntities%5B%5D=paragraph&alias=/page/efficacy-guidelines"
+  },
+
+  {
+    "pageID": "ich-multidisciplinary",
+    "url": "https://www.ich.org/page/multidisciplinary-guidelines",
+    "apiUrl": "https://admin.ich.org/api/v1/nodes?loadEntities%5B%5D=paragraph&alias=/page/multidisciplinary-guidelines"
+  }
+]

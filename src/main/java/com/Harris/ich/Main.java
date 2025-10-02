@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -26,21 +27,49 @@ import java.nio.charset.StandardCharsets;
 
 public class Main {
 
-    private static final Path PAGES_JSON = Paths.get("src", "main", "resources", "pages.json");
+    private static java.nio.file.Path baseDataDir(){
+        String home = System.getProperty("user.home");
+        return java.nio.file.Paths.get(home, "ICH-Webcrawler");
+    }
+
     private static final ObjectMapper MAPPER = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-    private static final Path SNAPSHOTS_DIR = Paths.get("snapshots");
-    private static final Path DIFFS_DIR = Paths.get("diffs");
+    private static final Path SNAPSHOTS_DIR = baseDataDir().resolve("snapshots");
+    private static final Path DIFFS_DIR = baseDataDir().resolve("diffs");
+
+    private static java.nio.file.Path diffPathForToday(){
+        return DIFFS_DIR.resolve(todayString()+".md");
+    }
+
+    private static List<PageConfig> loadPages(ObjectMapper mapper) throws Exception {
+        // Try absolute-from-root via the class (leading slash)
+        try (InputStream is = Main.class.getResourceAsStream("/pages.json")) {
+            if (is != null) {
+                return mapper.readValue(is,
+                        mapper.getTypeFactory().constructCollectionType(List.class, PageConfig.class));
+            }
+        }
+        // Try via classloader (no leading slash)
+        try (InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream("pages.json")) {
+            if (is != null) {
+                return mapper.readValue(is,
+                        mapper.getTypeFactory().constructCollectionType(List.class, PageConfig.class));
+            }
+        }
+        // Fallback: working dir (dev/override)
+        Path local = Paths.get("pages.json");
+        if (Files.exists(local)) {
+            try (InputStream is = Files.newInputStream(local)) {
+                return mapper.readValue(is,
+                        mapper.getTypeFactory().constructCollectionType(List.class, PageConfig.class));
+            }
+        }
+        throw new IllegalStateException("pages.json not found on classpath or working dir.");
+    }
 
     public static void main(String[] args) throws Exception {
         System.out.println("ICH Crawler v0 - booting");
 
-        if(!Files.exists(PAGES_JSON)){
-            System.err.println("Missing pages.json at" + PAGES_JSON.toAbsolutePath());
-            return;
-        }
-
-        List<PageConfig> pages = MAPPER.readValue(Files.newInputStream(PAGES_JSON),
-                MAPPER.getTypeFactory().constructCollectionType(List.class, PageConfig.class));
+        List<PageConfig> pages = loadPages(MAPPER);
 
         List<Pair> pairs = new ArrayList<>();
         HttpClient client = HttpClient.newHttpClient();
@@ -118,19 +147,27 @@ public class Main {
 
         Files.writeString(out, sb.toString(), StandardCharsets.UTF_8);
         System.out.println("Wrote diff -> "+ out.toString());
+        java.nio.file.Path md = diffPathForToday();
+        try {
+            openFile(md);
+        } catch (Exception e){
+            System.out.println("Could not open the DIFF output file at: " + md.toAbsolutePath().toString());
+        }
 
-        boolean hasChanges = !(diff.added.isEmpty() && diff.removed.isEmpty() && diff.titleChanged.isEmpty());
-        if (hasChanges){
-            java.nio.file.Path md = java.nio.file.Paths.get("diffs", todayString()+".md");
-            try{
-                if(java.awt.Desktop.isDesktopSupported()){
-                    java.awt.Desktop.getDesktop().open(md.toFile());
-                }else{
-                    System.out.println("Diff at: " + md.toAbsolutePath());
-                }
-            } catch (Exception e){
-                System.out.println("Could not auto-open diff. File at: " + md.toAbsolutePath());
-            }
+
+    }
+
+    private static void openFile(Path path) throws Exception{
+        String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+        if (os.contains("win")) {
+            // Use the shell: handles file associations and spaces in paths
+            new ProcessBuilder("cmd", "/c", "start", "", "\"" + path.toAbsolutePath() + "\"")
+                    .inheritIO()
+                    .start();
+        } else if (os.contains("mac")) {
+            new ProcessBuilder("open", path.toAbsolutePath().toString()).start();
+        } else {
+            new ProcessBuilder("xdg-open", path.toAbsolutePath().toString()).start();
         }
     }
 
