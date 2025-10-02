@@ -118,9 +118,9 @@ jar tf target\ICH-Webcrawler-0.1.0.jar | Select-String pages.json
 
 ```powershell
 & "$env:JAVA_HOME\bin\jpackage.exe" `
-  --name "ICH-Webcrawler" `
+  --name "ICH-Webcrawler-App" `
   --input "target" `
-  --main-jar "ICH-Webcrawler-0.1.0.jar" `
+  --main-jar "ICH-Webcrawler-x.x.x.jar" `
   --main-class com.Harris.ich.Main `
   --type app-image `
   --win-console
