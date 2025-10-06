@@ -10,11 +10,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
-import java.nio.file.DirectoryStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
+
 import java.util.*;
+import java.util.regex.*;
 
 import java.text.Normalizer;
 
@@ -23,6 +22,7 @@ import java.time.ZoneOffset;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.nio.charset.StandardCharsets;
+import java.util.regex.Pattern;
 
 
 /**
@@ -34,17 +34,6 @@ import java.nio.charset.StandardCharsets;
  */
 public class Main {
 
-
-    /**
-     * Returns the base directory for storing crawler data.
-     *
-     * @return path to the base data directory
-     */
-    private static java.nio.file.Path baseDataDir(){
-        String home = System.getProperty("user.home");
-        return java.nio.file.Paths.get(home, "ICH-Webcrawler");
-    }
-
     /** Jackson ObjectMapper configured to ignore unknown properties during deserialization. */
     private static final ObjectMapper MAPPER = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
@@ -54,49 +43,8 @@ public class Main {
     /** Directory path where markdown diff files are stored. */
     private static final Path DIFFS_DIR = baseDataDir().resolve("diffs");
 
-
-    /**
-     * Resolves the path for today's diff markdown file.
-     *
-     * @return path to today's diff file
-     */
-    private static java.nio.file.Path diffPathForToday(){
-        return DIFFS_DIR.resolve(todayString()+".md");
-    }
-
-
-    /**
-     * Loads page configurations from pages.json using multiple fallback strategies.
-     *
-     * @param mapper the ObjectMapper to use for deserialization
-     * @return list of PageConfig objects
-     * @throws Exception if the file cannot be found or parsed
-     */
-    private static List<PageConfig> loadPages(ObjectMapper mapper) throws Exception {
-        // Try absolute-from-root via the class (leading slash)
-        try (InputStream is = Main.class.getResourceAsStream("/pages.json")) {
-            if (is != null) {
-                return mapper.readValue(is,
-                        mapper.getTypeFactory().constructCollectionType(List.class, PageConfig.class));
-            }
-        }
-        // Try via classloader (no leading slash)
-        try (InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream("pages.json")) {
-            if (is != null) {
-                return mapper.readValue(is,
-                        mapper.getTypeFactory().constructCollectionType(List.class, PageConfig.class));
-            }
-        }
-        // Fallback: working dir (dev/override)
-        Path local = Paths.get("pages.json");
-        if (Files.exists(local)) {
-            try (InputStream is = Files.newInputStream(local)) {
-                return mapper.readValue(is,
-                        mapper.getTypeFactory().constructCollectionType(List.class, PageConfig.class));
-            }
-        }
-        throw new IllegalStateException("pages.json not found on classpath or working dir.");
-    }
+    /** Single rolling diff log file name */
+    private static final String SINGLE_DIFF_FILENAME = "ICH-DIFFS.md";
 
 
     /**
@@ -108,6 +56,8 @@ public class Main {
      */
     public static void main(String[] args) throws Exception {
         System.out.println("ICH Crawler v0 - booting");
+
+        consolidateLegacyDiffs();
 
         List<PageConfig> pages = loadPages(MAPPER);
 
@@ -155,12 +105,124 @@ public class Main {
         if(priorPath.isPresent()){
             Snapshot prior = readSnapshot(priorPath.get());
             Diff diff = DiffSnapshots.performDiff(prior, current);
-            writeDiffMarkdwon(todayString(), diff);
+            writeDiffMarkdown(todayString(), diff);
         }else{
             System.out.println("No prior Snapshot found. Skipping diff.");
         }
     }
 
+    private static void consolidateLegacyDiffs() throws Exception {
+        Files.createDirectories(DIFFS_DIR);
+        Path single = singleDiffLogPath();
+
+        Pattern p = Pattern.compile("^(\\d{4}-\\d{2}-\\d{2})\\.md$", Pattern.CASE_INSENSITIVE);
+        List<Path> legacy = new ArrayList<>();
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(DIFFS_DIR, "*.md")) {
+            for (Path f : ds){
+                String name = f.getFileName().toString();
+                Matcher m = p.matcher(name);
+                if(m.matches() && !f.equals(single)){
+                    legacy.add(f);
+                }
+            }
+        }
+
+        if (legacy.isEmpty()) return;
+
+        legacy.sort(Comparator.comparing(path -> path.getFileName().toString()));
+        StringBuilder merged = new StringBuilder();
+        if (Files.exists(single)){
+            merged.append(Files.readString(single));
+            if(!merged.isEmpty() && merged.charAt(merged.length()-1) != '\n') {
+                merged.append('\n');
+            }
+            merged.append("\n");
+        } else {
+            merged.append("# ICH DIff Log\n\n");
+            merged.append("_Consolidated on ").append(todayString()).append("_\n\n");
+        }
+
+        for (Path f : legacy){
+            String date = f.getFileName().toString().substring(0,10);
+            merged.append("## ").append(date).append("\n\n");
+
+            String raw = Files.readString(f);
+            String cleaned = raw
+                    .replaceFirst("(?is)^\\s*ICH\\s+Weekly\\s+Diff\\s*-\\s*\\d{4}-\\d{2}-\\d{2}\\s*\\n+", "")
+                    .trim();
+            merged.append(cleaned).append("\n\n");
+        }
+
+        Files.writeString(single, merged.toString(), StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+        Path archive = DIFFS_DIR.resolve("archive");
+        Files.createDirectories(archive);
+        for (Path f: legacy){
+            Files.move(f, archive.resolve(f.getFileName().toString()), StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    /**
+     * Resolves the path for the single output diff file.
+     *
+     * @return path to the output diff file
+     */
+    private static Path singleDiffLogPath(){
+        return DIFFS_DIR.resolve(SINGLE_DIFF_FILENAME);
+    }
+
+
+    /**
+     * Resolves the path for today's diff markdown file.
+     *
+     * @return path to today's diff file
+     */
+    private static java.nio.file.Path diffPathForToday(){
+        return DIFFS_DIR.resolve(todayString()+".md");
+    }
+
+    /**
+     * Returns the base directory for storing crawler data.
+     *
+     * @return path to the base data directory
+     */
+    private static java.nio.file.Path baseDataDir(){
+        String home = System.getProperty("user.home");
+        return java.nio.file.Paths.get(home, "ICH-Webcrawler");
+    }
+
+    /**
+     * Loads page configurations from pages.json using multiple fallback strategies.
+     *
+     * @param mapper the ObjectMapper to use for deserialization
+     * @return list of PageConfig objects
+     * @throws Exception if the file cannot be found or parsed
+     */
+    private static List<PageConfig> loadPages(ObjectMapper mapper) throws Exception {
+        // Try absolute-from-root via the class (leading slash)
+        try (InputStream is = Main.class.getResourceAsStream("/pages.json")) {
+            if (is != null) {
+                return mapper.readValue(is,
+                        mapper.getTypeFactory().constructCollectionType(List.class, PageConfig.class));
+            }
+        }
+        // Try via classloader (no leading slash)
+        try (InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream("pages.json")) {
+            if (is != null) {
+                return mapper.readValue(is,
+                        mapper.getTypeFactory().constructCollectionType(List.class, PageConfig.class));
+            }
+        }
+        // Fallback: working dir (dev/override)
+        Path local = Paths.get("pages.json");
+        if (Files.exists(local)) {
+            try (InputStream is = Files.newInputStream(local)) {
+                return mapper.readValue(is,
+                        mapper.getTypeFactory().constructCollectionType(List.class, PageConfig.class));
+            }
+        }
+        throw new IllegalStateException("pages.json not found on classpath or working dir.");
+    }
 
     /**
      * Writes a markdown file summarizing the differences between snapshots.
@@ -169,40 +231,49 @@ public class Main {
      * @param diff the computed diff object
      * @throws Exception if writing or opening the file fails
      */
-    private static void writeDiffMarkdwon(String date, Diff diff) throws Exception{
+    private static void writeDiffMarkdown(String date, Diff diff) throws Exception{
         Files.createDirectories(DIFFS_DIR);
-        Path out = DIFFS_DIR.resolve(date+".md");
+        Path out = singleDiffLogPath();
+
+        if(Files.exists(out)){
+            String content = Files.readString(out);
+            Pattern p = Pattern.compile("^##\\s+"+Pattern.quote(date)+"\\b", Pattern.MULTILINE);
+            if(p.matcher(content).find()){
+                System.out.println("Diff for " + date + " already logged. Skipping append.");
+                openFile(out);
+                return;
+            }
+        }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("ICH Weekly Diff - ").append(date).append("\n\n");
+        sb.append("## ").append(date).append("\n\n");
+
         if(diff.added.isEmpty() && diff.removed.isEmpty() && diff.titleChanged.isEmpty()){
-            sb.append("No Changes. \n");
+            sb.append("No changes.\n\n");
         }else{
-            for(Snapshot.SnapshotItem it: diff.added){
-                sb.append("ADDED:   [").append(it.code).append("] ").append(it.title).append("\n");
+            for (Snapshot.SnapshotItem it : diff.added){
+                sb.append("ADDED:    [").append(it.code).append("]  ").append(it.title).append("\n");
             }
-            sb.append("\n\n");
-            for(Snapshot.SnapshotItem it: diff.removed){
-                sb.append("REMOVED: [").append(it.code).append("] ").append(it.title).append("\n");
+            if (!diff.added.isEmpty()) sb.append("\n");
+
+            for (Snapshot.SnapshotItem it : diff.removed){
+                sb.append("REMOVED:  [").append(it.code).append("]  ").append(it.title).append("\n");
             }
-            sb.append("\n\n");
-            for(TitleChange tc : diff.titleChanged){
-                sb.append("TITLE CHANGED: {").append(tc.code).append("\n")
+            if (!diff.removed.isEmpty()) sb.append("\n");
+
+            for(TitleChange tc: diff.titleChanged){
+                sb.append("TITLE CHANGED: [").append(tc.code).append("]\n")
                         .append("    \"").append(tc.oldTitle).append("\"\n")
                         .append(" -> \"").append(tc.newTitle).append("\"\n");
             }
+            sb.append("\n");
         }
 
-        Files.writeString(out, sb.toString(), StandardCharsets.UTF_8);
-        System.out.println("Wrote diff -> "+ out.toString());
-        java.nio.file.Path md = diffPathForToday();
-        try {
-            openFile(md);
-        } catch (Exception e){
-            System.out.println("Could not open the DIFF output file at: " + md.toAbsolutePath().toString());
-        }
+        sb.append("\n");
 
+        Files.writeString(out, sb.toString(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 
+        openFile(out);
     }
 
 
