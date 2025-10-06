@@ -1,6 +1,6 @@
 ---
 Author: Mike Harris
-Version: 0.1.1
+Version: 0.1.2
 Github: https://github.com/GlacialDrift/ICH-Webcrawler/
 ---
 # ICH Webcrawler
@@ -29,18 +29,24 @@ It checks guideline pages for changes, saves daily snapshots, and generates diff
 Snapshots and diffs are stored under your user profile:
 
 ```
-%USERPROFILE%\ICH-Webcrawler  
-snapshots\YYYY-MM-DD.json  
-diffs\YYYY-MM-DD.md
+%USERPROFILE%\ICH-Webcrawler\snapshots\YYYY-MM-DD.json  
+%USERPROFILE%\ICH-Webcrawler\diffs\ICH-DIFFS.md
 ```
 
 - **Snapshots**: full list of guidelines at a point in time.
-- **Diffs**: added, removed, or changed guidelines since last run.
+- **Diffs**: added, removed, or changed guidelines since last run, compiled as a single running log. 
+
+In version 0.1.2, diff logs were updated to add to a single running log that appends new diffs to the end of a file.
+This was done to minimize the number of distinct files and make it easier to FIND diffs when they occur (and reference them in the future).
 
 ## Example diff
 
 ```
-ICH Weekly Diff – 2025-10-02
+# ICH Diff Log
+
+(optional depending on previous user usage) _Consolidated on 2025-10-06_
+
+## YYYY-MM-DD
 
 ADDED:   [Q1G] New Guideline Title
 REMOVED: [Q1C] Stability Testing for New Dosage Forms
@@ -53,6 +59,7 @@ TITLE_CHANGED: [Q1 EWG]
 
 - **Automated runs:** Use Windows Task Scheduler to run weekly
 - **Manual runs:** Just double-click the EXE whenever you want to check for updates.
+- 
 ## Requirements
 
 - Windows 10/11
