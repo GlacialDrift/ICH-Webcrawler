@@ -8,7 +8,7 @@ target/
 *.iws
 *.iml
 *.ipr
-/dist-resources/*
+dist-resources/
 
 ## Debugging HTML Outputs ##
 *.html
