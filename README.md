@@ -7,6 +7,11 @@ Github: https://github.com/GlacialDrift/ICH-Webcrawler/
 
 A lightweight crawler for the [ICH website](https://www.ich.org/), built in Java.  
 It checks guideline pages for changes, saves daily snapshots, and generates diffs to highlight new/removed/updated guidelines.
+Four ICH pages are checked:
+ - [Quality Guidelines](https://www.ich.org/page/quality-guidelines)
+ - [Safety Guidelines](https://www.ich.org/page/safety-guidelines)
+ - [Efficacy Guidelines](https://www.ich.org/page/efficacy-guidelines)
+ - [Multidisciplinary Guidelines](https://www.ich.org/page/multidisciplinary-guidelines)
 
 ## Installation (for users)
 
